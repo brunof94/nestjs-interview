@@ -1,58 +1,35 @@
 import { Injectable } from '@nestjs/common';
 import { CreateTodoListDto } from './dtos/create-todo_list';
 import { UpdateTodoListDto } from './dtos/update-todo_list';
-import { TodoList } from '../interfaces/todo_list.interface';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { TodoList } from './todo_list.entity';
 
 @Injectable()
 export class TodoListsService {
-  private readonly todolists: TodoList[];
+  constructor(
+    @InjectRepository(TodoList)
+    private readonly todoListRepository: Repository<TodoList>,
+  ) {}
 
-  constructor(todoLists: TodoList[] = []) {
-    this.todolists = todoLists;
+  async all(): Promise<TodoList[]> {
+    return await this.todoListRepository.find();
   }
 
-  all(): TodoList[] {
-    return this.todolists;
+  async get(id: number): Promise<TodoList | null> {
+    return await this.todoListRepository.findOneBy({ id });
   }
 
-  get(id: number): TodoList {
-    return this.todolists.find((x) => x.id === Number(id));
+  async create(dto: CreateTodoListDto): Promise<TodoList> {
+    const todoList = this.todoListRepository.create({ name: dto.name });
+    return await this.todoListRepository.save(todoList);
   }
 
-  create(dto: CreateTodoListDto): TodoList {
-    const todoList: TodoList = {
-      id: this.nextId(),
-      name: dto.name,
-    };
-
-    this.todolists.push(todoList);
-
-    return todoList;
+  async update(id: number, dto: UpdateTodoListDto): Promise<TodoList> {
+    return await this.todoListRepository.save({ id, ...dto } as TodoList);
   }
 
-  update(id: number, dto: UpdateTodoListDto): TodoList {
-    const todolist = this.todolists.find((x) => x.id == Number(id));
-
-    // Update the record
-    todolist.name = dto.name;
-
-    return todolist;
-  }
-
-  delete(id: number): void {
-    const index = this.todolists.findIndex((x) => x.id == Number(id));
-
-    if (index > -1) {
-      this.todolists.splice(index, 1);
-    }
-  }
-
-  private nextId(): number {
-    const last = this.todolists
-      .map((x) => x.id)
-      .sort()
-      .reverse()[0];
-
-    return last ? last + 1 : 1;
+  async delete(id: number): Promise<void> {
+    await this.todoListRepository.delete(id);
   }
 }
