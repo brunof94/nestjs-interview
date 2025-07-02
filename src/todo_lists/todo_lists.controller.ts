@@ -17,30 +17,30 @@ export class TodoListsController {
   constructor(private todoListsService: TodoListsService) {}
 
   @Get()
-  index(): TodoList[] {
+  index(): Promise<TodoList[]> {
     return this.todoListsService.all();
   }
 
   @Get('/:todoListId')
-  show(@Param() param: { todoListId: number }): TodoList {
+  show(@Param() param: { todoListId: number }): Promise<TodoList | null> {
     return this.todoListsService.get(param.todoListId);
   }
 
   @Post()
-  create(@Body() dto: CreateTodoListDto): TodoList {
+  create(@Body() dto: CreateTodoListDto): Promise<TodoList> {
     return this.todoListsService.create(dto);
   }
 
   @Put('/:todoListId')
   update(
-    @Param() param: { todoListId: number },
+    @Param() param: { todoListId: string },
     @Body() dto: UpdateTodoListDto,
-  ): TodoList {
-    return this.todoListsService.update(param.todoListId, dto);
+  ): Promise<TodoList> {
+    return this.todoListsService.update(Number(param.todoListId), dto);
   }
 
   @Delete('/:todoListId')
-  delete(@Param() param: { todoListId: number }): void {
-    this.todoListsService.delete(param.todoListId);
+  delete(@Param() param: { todoListId: number }): Promise<void> {
+    return this.todoListsService.delete(param.todoListId);
   }
 }
