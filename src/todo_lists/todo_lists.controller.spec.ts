@@ -46,7 +46,7 @@ describe('TodoListsController', () => {
         { id: 1, name: 'Shopping List' },
         { id: 2, name: 'Work Tasks' },
       ];
-      
+
       todoListRepositoryMock.find.mockResolvedValue(mockTodoLists);
 
       const result = await todoListsController.index();
@@ -68,7 +68,7 @@ describe('TodoListsController', () => {
     it('should create a new todo list', async () => {
       const createDto = { name: 'New List' };
       const mockCreatedTodoList = { id: 1, name: 'New List' };
-      
+
       todoListRepositoryMock.create.mockReturnValue(mockCreatedTodoList);
       todoListRepositoryMock.save.mockResolvedValue(mockCreatedTodoList);
 
@@ -83,7 +83,7 @@ describe('TodoListsController', () => {
       const updateDto = { name: 'Updated List' };
       const existingTodoList = { id: 1, name: 'Old Name' };
       const updatedTodoList = { id: 1, name: 'Updated List' };
-      
+
       todoListRepositoryMock.findOneBy.mockResolvedValue(existingTodoList);
       todoListRepositoryMock.save.mockResolvedValue(updatedTodoList);
 
