@@ -1,70 +1,106 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { before } from 'node:test';
 import { TodoListsController } from './todo_lists.controller';
 import { TodoListsService } from './todo_lists.service';
+import { INestApplication } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { TodoList } from './todo_list.entity';
 
 describe('TodoListsController', () => {
-  let todoListService: TodoListsService;
+  let app: INestApplication;
   let todoListsController: TodoListsController;
+  let todoListRepositoryMock: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
-    todoListService = new TodoListsService([
-      { id: 1, name: 'test1' },
-      { id: 2, name: 'test2' },
-    ]);
+    todoListRepositoryMock = {
+      find: jest.fn(),
+      findOneBy: jest.fn(),
+      save: jest.fn(),
+      delete: jest.fn(),
+      create: jest.fn(),
+    };
 
-    const app: TestingModule = await Test.createTestingModule({
+    const module: TestingModule = await Test.createTestingModule({
       controllers: [TodoListsController],
-      providers: [{ provide: TodoListsService, useValue: todoListService }],
+      providers: [
+        TodoListsService,
+        {
+          provide: getRepositoryToken(TodoList),
+          useValue: todoListRepositoryMock,
+        },
+      ],
     }).compile();
 
-    todoListsController = app.get<TodoListsController>(TodoListsController);
+    app = module.createNestApplication();
+    await app.init();
+
+    todoListsController = module.get<TodoListsController>(TodoListsController);
+  });
+
+  afterAll(async () => {
+    await app.close();
   });
 
   describe('index', () => {
-    it('should return the list of todolist', () => {
-      expect(todoListsController.index()).toEqual([
-        { id: 1, name: 'test1' },
-        { id: 2, name: 'test2' },
-      ]);
+    it('should return all todo lists', async () => {
+      const mockTodoLists = [
+        { id: 1, name: 'Shopping List' },
+        { id: 2, name: 'Work Tasks' },
+      ];
+      
+      todoListRepositoryMock.find.mockResolvedValue(mockTodoLists);
+
+      const result = await todoListsController.index();
+
+      expect(result).toEqual(mockTodoLists);
     });
   });
 
   describe('show', () => {
-    it('should return the todolist with the given id', () => {
-      expect(todoListsController.show({ todoListId: 1 })).toEqual({
-        id: 1,
-        name: 'test1',
-      });
-    });
-  });
-
-  describe('update', () => {
-    it('should update the todolist with the given id', () => {
-      expect(
-        todoListsController.update({ todoListId: 1 }, { name: 'modified' }),
-      ).toEqual({ id: 1, name: 'modified' });
-
-      expect(todoListService.get(1).name).toEqual('modified');
+    it('should return a single todo list by id', async () => {
+      const mockTodoList = { id: 1, name: 'Shopping List' };
+      todoListRepositoryMock.findOneBy.mockResolvedValue(mockTodoList);
+      const result = await todoListsController.show({ todoListId: 1 });
+      expect(result).toEqual(mockTodoList);
     });
   });
 
   describe('create', () => {
-    it('should update the todolist with the given id', () => {
-      expect(todoListsController.create({ name: 'new' })).toEqual({
-        id: 3,
-        name: 'new',
-      });
+    it('should create a new todo list', async () => {
+      const createDto = { name: 'New List' };
+      const mockCreatedTodoList = { id: 1, name: 'New List' };
+      
+      todoListRepositoryMock.create.mockReturnValue(mockCreatedTodoList);
+      todoListRepositoryMock.save.mockResolvedValue(mockCreatedTodoList);
 
-      expect(todoListService.all().length).toBe(3);
+      const result = await todoListsController.create(createDto);
+
+      expect(result).toEqual(mockCreatedTodoList);
+    });
+  });
+
+  describe('update', () => {
+    it('should update an existing todo list', async () => {
+      const updateDto = { name: 'Updated List' };
+      const existingTodoList = { id: 1, name: 'Old Name' };
+      const updatedTodoList = { id: 1, name: 'Updated List' };
+      
+      todoListRepositoryMock.findOneBy.mockResolvedValue(existingTodoList);
+      todoListRepositoryMock.save.mockResolvedValue(updatedTodoList);
+
+      const result = await todoListsController.update(
+        { todoListId: '1' },
+        updateDto,
+      );
+
+      expect(result).toEqual(updatedTodoList);
     });
   });
 
   describe('delete', () => {
-    it('should delete the todolist with the given id', () => {
-      expect(() => todoListsController.delete({ todoListId: 1 })).not.toThrow();
-
-      expect(todoListService.all().map((x) => x.id)).toEqual([2]);
+    it('should delete a todo list', async () => {
+      todoListRepositoryMock.delete.mockResolvedValue({ affected: 1 });
+      await todoListsController.delete({ todoListId: 1 });
+      expect(todoListRepositoryMock.delete).toHaveBeenCalledWith(1);
     });
   });
 });
