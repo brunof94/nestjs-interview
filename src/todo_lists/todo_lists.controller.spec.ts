@@ -1,106 +1,177 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { TodoListsController } from './todo_lists.controller';
 import { TodoListsService } from './todo_lists.service';
-import { INestApplication } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { TodoList } from './todo_list.entity';
 
 describe('TodoListsController', () => {
-  let app: INestApplication;
+  let todoListService: TodoListsService;
   let todoListsController: TodoListsController;
-  let todoListRepositoryMock: jest.Mocked<Record<string, jest.Mock>>;
 
   beforeEach(async () => {
-    todoListRepositoryMock = {
-      find: jest.fn(),
-      findOneBy: jest.fn(),
-      save: jest.fn(),
-      delete: jest.fn(),
-      create: jest.fn(),
-    };
+    todoListService = new TodoListsService([
+      { id: 1, name: 'test1', items: [] },
+      { id: 2, name: 'test2', items: [] },
+    ]);
 
-    const module: TestingModule = await Test.createTestingModule({
+    const app: TestingModule = await Test.createTestingModule({
       controllers: [TodoListsController],
-      providers: [
-        TodoListsService,
-        {
-          provide: getRepositoryToken(TodoList),
-          useValue: todoListRepositoryMock,
-        },
-      ],
+      providers: [{ provide: TodoListsService, useValue: todoListService }],
     }).compile();
 
-    app = module.createNestApplication();
-    await app.init();
-
-    todoListsController = module.get<TodoListsController>(TodoListsController);
-  });
-
-  afterAll(async () => {
-    await app.close();
+    todoListsController = app.get<TodoListsController>(TodoListsController);
   });
 
   describe('index', () => {
-    it('should return all todo lists', async () => {
-      const mockTodoLists = [
-        { id: 1, name: 'Shopping List' },
-        { id: 2, name: 'Work Tasks' },
-      ];
-
-      todoListRepositoryMock.find.mockResolvedValue(mockTodoLists);
-
-      const result = await todoListsController.index();
-
-      expect(result).toEqual(mockTodoLists);
+    it('should return the list of todolist', () => {
+      expect(todoListsController.index()).toEqual([
+        { id: 1, name: 'test1', items: [] },
+        { id: 2, name: 'test2', items: [] },
+      ]);
     });
   });
 
   describe('show', () => {
-    it('should return a single todo list by id', async () => {
-      const mockTodoList = { id: 1, name: 'Shopping List' };
-      todoListRepositoryMock.findOneBy.mockResolvedValue(mockTodoList);
-      const result = await todoListsController.show({ todoListId: 1 });
-      expect(result).toEqual(mockTodoList);
+    it('should return the todolist with the given id', () => {
+      expect(todoListsController.show({ todoListId: 1 })).toEqual({
+        id: 1,
+        name: 'test1',
+        items: [],
+      });
     });
-  });
 
-  describe('create', () => {
-    it('should create a new todo list', async () => {
-      const createDto = { name: 'New List' };
-      const mockCreatedTodoList = { id: 1, name: 'New List' };
-
-      todoListRepositoryMock.create.mockReturnValue(mockCreatedTodoList);
-      todoListRepositoryMock.save.mockResolvedValue(mockCreatedTodoList);
-
-      const result = await todoListsController.create(createDto);
-
-      expect(result).toEqual(mockCreatedTodoList);
+    it('should throw NotFoundException when todolist not found', () => {
+      expect(() => todoListsController.show({ todoListId: 999 })).toThrow(
+        NotFoundException,
+      );
     });
   });
 
   describe('update', () => {
-    it('should update an existing todo list', async () => {
-      const updateDto = { name: 'Updated List' };
-      const existingTodoList = { id: 1, name: 'Old Name' };
-      const updatedTodoList = { id: 1, name: 'Updated List' };
+    it('should update the todolist with the given id', () => {
+      expect(
+        todoListsController.update({ todoListId: 1 }, { name: 'modified' }),
+      ).toEqual({ id: 1, name: 'modified', items: [] });
 
-      todoListRepositoryMock.findOneBy.mockResolvedValue(existingTodoList);
-      todoListRepositoryMock.save.mockResolvedValue(updatedTodoList);
+      expect(todoListService.get(1).name).toEqual('modified');
+    });
 
-      const result = await todoListsController.update(
-        { todoListId: '1' },
-        updateDto,
-      );
+    it('should throw NotFoundException when todolist not found', () => {
+      expect(() =>
+        todoListsController.update({ todoListId: 999 }, { name: 'modified' }),
+      ).toThrow(NotFoundException);
+    });
+  });
 
-      expect(result).toEqual(updatedTodoList);
+  describe('create', () => {
+    it('should create a new todolist', () => {
+      expect(todoListsController.create({ name: 'new' })).toEqual({
+        id: 3,
+        name: 'new',
+        items: [],
+      });
+
+      expect(todoListService.all().length).toBe(3);
     });
   });
 
   describe('delete', () => {
-    it('should delete a todo list', async () => {
-      todoListRepositoryMock.delete.mockResolvedValue({ affected: 1 });
-      await todoListsController.delete({ todoListId: 1 });
-      expect(todoListRepositoryMock.delete).toHaveBeenCalledWith(1);
+    it('should delete the todolist with the given id', () => {
+      expect(() => todoListsController.delete({ todoListId: 1 })).not.toThrow();
+
+      expect(todoListService.all().map((x) => x.id)).toEqual([2]);
+    });
+
+    it('should throw NotFoundException when todolist not found', () => {
+      expect(() => todoListsController.delete({ todoListId: 999 })).toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('TodoListItem operations', () => {
+    beforeEach(() => {
+      // Ensure we have a todo list with some items for testing
+      todoListService.createItem(1, { title: 'Test item 1', completed: false });
+      todoListService.createItem(1, { title: 'Test item 2', completed: true });
+    });
+
+    describe('getAllItems', () => {
+      it('should return all items for a todolist', () => {
+        const items = todoListsController.getAllItems({ todoListId: 1 });
+        expect(items).toHaveLength(2);
+        expect(items[0].title).toBe('Test item 1');
+        expect(items[1].title).toBe('Test item 2');
+      });
+    });
+
+    describe('getItem', () => {
+      it('should return a specific item', () => {
+        const item = todoListsController.getItem({ todoListId: 1, itemId: 1 });
+        expect(item.title).toBe('Test item 1');
+        expect(item.completed).toBe(false);
+      });
+
+      it('should throw NotFoundException when item not found', () => {
+        expect(() =>
+          todoListsController.getItem({ todoListId: 1, itemId: 999 }),
+        ).toThrow(NotFoundException);
+      });
+
+      it('should throw NotFoundException when todolist not found', () => {
+        expect(() =>
+          todoListsController.getItem({ todoListId: 999, itemId: 1 }),
+        ).toThrow(NotFoundException);
+      });
+    });
+
+    describe('createItem', () => {
+      it('should create a new todo item', () => {
+        const newItem = todoListsController.createItem(
+          { todoListId: 1 },
+          { title: 'New item', completed: false },
+        );
+        expect(newItem.title).toBe('New item');
+        expect(newItem.completed).toBe(false);
+        expect(newItem.id).toBeDefined();
+      });
+    });
+
+    describe('updateItem', () => {
+      it('should update an existing todo item', () => {
+        const updatedItem = todoListsController.updateItem(
+          { todoListId: 1, itemId: 1 },
+          { title: 'Updated item', completed: true },
+        );
+        expect(updatedItem.title).toBe('Updated item');
+        expect(updatedItem.completed).toBe(true);
+      });
+
+      it('should throw a NotFoundException if the item does not exist', () => {
+        expect(() =>
+          todoListsController.updateItem(
+            { todoListId: 1, itemId: 999 },
+            { title: 'Updated item', completed: true },
+          ),
+        ).toThrow(NotFoundException);
+      });
+    });
+
+    describe('deleteItem', () => {
+      it('should delete a todo item', () => {
+        expect(() =>
+          todoListsController.deleteItem({ todoListId: 1, itemId: 1 }),
+        ).not.toThrow();
+
+        const items = todoListsController.getAllItems({ todoListId: 1 });
+        expect(items).toHaveLength(1);
+        expect(items[0].id).toBe(2);
+      });
+
+      it('should throw a NotFoundException if the item does not exist', () => {
+        expect(() =>
+          todoListsController.deleteItem({ todoListId: 1, itemId: 999 }),
+        ).toThrow(NotFoundException);
+      });
     });
   });
 });
