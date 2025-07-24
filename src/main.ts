@@ -7,6 +7,14 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Enable CORS for frontend communication
+  app.enableCors({
+    origin: ['http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: true,
+  });
+
   // Enable global exception filter
   app.useGlobalFilters(new AllExceptionsFilter());
 
@@ -22,4 +30,7 @@ async function bootstrap() {
   await app.listen(3000);
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('Failed to start application:', error);
+  process.exit(1);
+});
